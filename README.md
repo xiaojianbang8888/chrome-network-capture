@@ -244,7 +244,7 @@ cd chrome-network-capture
 
 ## 联系方式
 
-- GitHub Issues: https://github.com/your-repo/chrome-network-capture/issues
+- GitHub Issues: https://github.com/xiaojianbang8888/chrome-network-capture/issues
 - 微信: xiaojianbang8888
 - QQ: 24358757
 - QQ: 285092564
