@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Capture Pro</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="popup-container">
+        <!-- 头部 -->
+        <div class="header">
+            <h2>Network Capture Pro</h2>
+            <div class="status-indicator" id="statusIndicator">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">未开始</span>
+            </div>
+        </div>
+
+        <!-- 控制按钮 -->
+        <div class="controls">
+            <button id="toggleCaptureBtn" class="btn btn-primary">
+                <span id="btnText">开始捕获</span>
+            </button>
+            <button id="openPanelBtn" class="btn btn-secondary">查看详情</button>
+        </div>
+
+        <!-- 快速统计 -->
+        <div class="quick-stats">
+            <div class="stat-row">
+                <div class="stat-item">
+                    <div class="stat-number" id="requestCount">0</div>
+                    <div class="stat-label">请求</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number" id="savedFilesCount">0</div>
+                    <div class="stat-label">已保存</div>
+                </div>
+            </div>
+            <div class="stat-row">
+                <div class="stat-item">
+                    <div class="stat-number" id="dataSize">0 KB</div>
+                    <div class="stat-label">数据量</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number" id="captureTime">00:00</div>
+                    <div class="stat-label">时长</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 最近请求 -->
+        <div class="recent-requests">
+            <h3>最近请求</h3>
+            <div id="recentRequestsList" class="request-list">
+                <div class="no-requests">暂无请求</div>
+            </div>
+        </div>
+
+        <!-- 底部操作 -->
+        <div class="footer-actions">
+            <button id="clearBtn" class="btn btn-outline">清空数据</button>
+            <button id="settingsBtn" class="btn btn-outline">设置</button>
+        </div>
+
+        <!-- 作者信息 -->
+        <div class="author-info">
+            <div class="author-text">Created by 小肩膀</div>
+            <div class="version-text">v1.0.0</div>
+        </div>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html>

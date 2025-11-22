@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Capture Pro - 数据包分析面板</title>
+    <link rel="stylesheet" href="panel.css">
+</head>
+<body>
+    <div class="container">
+        <!-- 头部工具栏 -->
+        <div class="toolbar">
+            <div class="toolbar-header">
+                <h1>网络请求捕获分析</h1>
+                <div class="author-badge">by 小肩膀</div>
+            </div>
+            <div class="toolbar-actions">
+                <button id="refreshBtn" class="btn btn-secondary">刷新</button>
+                <button id="clearBtn" class="btn btn-danger">清空数据</button>
+                <button id="exportBtn" class="btn btn-primary">导出数据</button>
+            </div>
+        </div>
+
+        <!-- 统计信息 -->
+        <div class="stats-bar">
+            <div class="stat-item">
+                <span class="stat-label">总请求数:</span>
+                <span id="totalRequests" class="stat-value">0</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">HTML:</span>
+                <span id="htmlCount" class="stat-value">0</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">CSS:</span>
+                <span id="cssCount" class="stat-value">0</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">JS:</span>
+                <span id="jsCount" class="stat-value">0</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">图片:</span>
+                <span id="imageCount" class="stat-value">0</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">其他:</span>
+                <span id="otherCount" class="stat-value">0</span>
+            </div>
+        </div>
+
+        <!-- 过滤器 -->
+        <div class="filter-bar">
+            <div class="filter-group">
+                <label>搜索:</label>
+                <input type="text" id="searchInput" placeholder="搜索URL或内容...">
+            </div>
+            <div class="filter-group">
+                <label>类型:</label>
+                <select id="typeFilter">
+                    <option value="">全部</option>
+                    <option value="html">HTML</option>
+                    <option value="css">CSS</option>
+                    <option value="javascript">JavaScript</option>
+                    <option value="json">JSON</option>
+                    <option value="image">图片</option>
+                    <option value="font">字体</option>
+                    <option value="other">其他</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>状态:</label>
+                <select id="statusFilter">
+                    <option value="">全部</option>
+                    <option value="2xx">2xx 成功</option>
+                    <option value="3xx">3xx 重定向</option>
+                    <option value="4xx">4xx 客户端错误</option>
+                    <option value="5xx">5xx 服务器错误</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>方法:</label>
+                <select id="methodFilter">
+                    <option value="">全部</option>
+                    <option value="GET">GET</option>
+                    <option value="POST">POST</option>
+                    <option value="PUT">PUT</option>
+                    <option value="DELETE">DELETE</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- 请求列表 -->
+        <div class="main-content">
+            <div class="request-list">
+                <div class="list-header">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 150px;">方法</th>
+                                <th style="width: 300px;">状态</th>
+                                <th>URL</th>
+                                <th style="width: 120px;">类型</th>
+                                <th style="width: 150px;">大小</th>
+                                <th style="width: 120px;">时间</th>
+                            </tr>
+                        </thead>
+                    </table>
+                </div>
+                <div class="list-body" id="requestListBody">
+                    <div class="loading">加载中...</div>
+                </div>
+            </div>
+
+            <!-- 请求详情 -->
+            <div class="request-details" id="requestDetails">
+                <div class="details-placeholder">
+                    <p>选择一个请求查看详情</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 模态框 - 请求详情 -->
+    <div id="detailModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">请求详情</h3>
+                <span class="close" id="closeModal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="detail-tabs">
+                    <button class="tab-btn active" data-tab="headers">请求头</button>
+                    <button class="tab-btn" data-tab="response">响应头</button>
+                    <button class="tab-btn" data-tab="body">响应体</button>
+                    <button class="tab-btn" data-tab="preview">预览</button>
+                </div>
+                <div class="detail-content">
+                    <div id="headersContent" class="tab-content active">
+                        <h4>请求信息</h4>
+                        <div id="requestHeaders"></div>
+                    </div>
+                    <div id="responseContent" class="tab-content">
+                        <h4>响应信息</h4>
+                        <div id="responseHeaders"></div>
+                    </div>
+                    <div id="bodyContent" class="tab-content">
+                        <h4>响应体</h4>
+                        <pre id="responseBody"></pre>
+                    </div>
+                    <div id="previewContent" class="tab-content">
+                        <h4>内容预览</h4>
+                        <div id="contentPreview"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="panel.js"></script>
+</body>
+</html>

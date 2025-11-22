@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "Network Capture Pro",
+  "version": "1.0.0",
+  "description": "高级网络请求捕获和分析工具 - 作者：小肩膀",
+  "permissions": [
+    "debugger",
+    "activeTab",
+    "storage",
+    "downloads",
+    "tabs"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Network Capture Pro"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' data: blob:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline';"
+  }
+}
