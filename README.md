@@ -242,14 +242,12 @@ cd chrome-network-capture
 - style: 代码格式调整
 - refactor: 代码重构
 
-## 许可证
-
-MIT License - 详见 [LICENSE](LICENSE) 文件
-
 ## 联系方式
 
 - GitHub Issues: https://github.com/your-repo/chrome-network-capture/issues
-- Email: your-email@example.com
+- 微信: xiaojianbang8888
+- QQ: 24358757
+- QQ: 285092564
 
 ---
 
