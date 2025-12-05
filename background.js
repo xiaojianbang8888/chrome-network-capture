@@ -1,3 +1,6 @@
+// 导入JSZip库用于压缩打包
+importScripts('lib/jszip.min.js');
+
 class NetworkCapture {
   constructor() {
     this.tabId = null;
@@ -433,38 +436,12 @@ class NetworkCapture {
         // 保存包含响应体的完整信息
         await this.saveRequest(completeRequest);
 
-        // 如果是HTML/CSS/JS文件，保存到本地
-        if (completeRequest.contentType &&
-            ['html', 'css', 'javascript'].includes(completeRequest.contentType)) {
-
-          console.log('准备保存文件:', {
-            url: completeRequest.url,
-            contentType: completeRequest.contentType,
-            mimeType: completeRequest.mimeType
-          });
-
-          let content;
-          if (response.base64Encoded) {
-            content = atob(response.body);
-          } else {
-            content = response.body;
-          }
-
-          // 异步保存文件，但不等待完成以避免阻塞
-          this.saveFileLocally(
-            completeRequest.url,
-            content,
-            completeRequest.mimeType
-          ).catch(error => {
-            console.error('文件保存失败:', error);
-          });
-        } else {
-          console.log('跳过文件保存:', {
-            url: completeRequest.url,
-            contentType: completeRequest.contentType,
-            mimeType: completeRequest.mimeType
-          });
-        }
+        console.log('请求已保存到数据库:', {
+          url: completeRequest.url,
+          contentType: completeRequest.contentType,
+          mimeType: completeRequest.mimeType,
+          hasBody: !!completeRequest.responseBody
+        });
 
       } catch (responseError) {
         // 获取响应体失败，但这不影响基本请求信息的保存
@@ -490,6 +467,214 @@ class NetworkCapture {
     if (mimeType.includes('audio/')) return 'audio';
 
     return 'other';
+  }
+
+  // 将响应体转换为Uint8Array，支持base64和文本
+  getBodyBuffer(request) {
+    if (!request.responseBody) return new Uint8Array();
+
+    if (request.base64Encoded) {
+      // Base64解码
+      const binary = atob(request.responseBody);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      return bytes;
+    }
+
+    // 文本编码
+    return new TextEncoder().encode(request.responseBody);
+  }
+
+  // 根据URL构造安全的文件路径
+  buildFilePath(url, contentType, mimeType) {
+    try {
+      const urlObj = new URL(url);
+      const domain = urlObj.hostname.replace(/[^a-zA-Z0-9\.\-]/g, '_');
+      let pathname = urlObj.pathname || '/';
+
+      // 如果路径以/结尾，添加默认文件名
+      if (pathname.endsWith('/')) {
+        const fallbackExt =
+          contentType === 'css' ? '.css' :
+          contentType === 'javascript' ? '.js' :
+          contentType === 'json' ? '.json' :
+          '.html';
+        pathname = pathname + 'index' + fallbackExt;
+      }
+
+      // 清理路径中的特殊字符
+      const safePath = pathname.split('/').map(seg =>
+        seg.replace(/[^a-zA-Z0-9\-\._]/g, '_')
+      ).join('/');
+
+      // 处理query参数和hash，避免文件覆盖
+      let queryHash = '';
+      if (urlObj.search || urlObj.hash) {
+        // 创建一个简单的hash来标识不同的query参数
+        const queryString = (urlObj.search + urlObj.hash).replace(/[^a-zA-Z0-9]/g, '');
+        // 使用前8个字符作为标识符
+        queryHash = queryString.substring(0, 8) || 'noquery';
+      }
+
+      // 如果没有扩展名，根据mimeType添加
+      let fullPath = `${domain}${safePath}`;
+
+      // 如果有query或hash，在扩展名前插入hash
+      if (queryHash) {
+        const lastDotIndex = fullPath.lastIndexOf('.');
+        if (lastDotIndex > 0) {
+          fullPath = fullPath.substring(0, lastDotIndex) + `_${queryHash}` + fullPath.substring(lastDotIndex);
+        } else {
+          fullPath += `_${queryHash}`;
+        }
+      }
+
+      // 如果没有扩展名，根据mimeType添加
+      if (!fullPath.match(/\.[a-zA-Z0-9]+$/) && mimeType) {
+        if (mimeType.includes('image/')) {
+          const ext = mimeType.split('/')[1] || 'img';
+          fullPath += '.' + ext.replace(/[^a-zA-Z0-9]/g, '');
+        } else if (mimeType.includes('font/')) {
+          fullPath += '.font';
+        }
+      }
+
+      return fullPath.startsWith('/') ? fullPath.slice(1) : fullPath;
+    } catch (error) {
+      console.error('构建文件路径失败:', error);
+      return `unknown_${Date.now()}`;
+    }
+  }
+
+  // 创建ZIP并触发下载
+  async createZipForTab(tabId, options = {}) {
+    try {
+      if (!this.db) await this.initDB();
+
+      console.log(`开始为标签页 ${tabId} 创建ZIP...`);
+      const requests = await this.getAllRequests(tabId);
+
+      if (!requests || requests.length === 0) {
+        throw new Error('没有找到任何请求数据');
+      }
+
+      // 预估总大小（以MB为单位）
+      const totalSize = requests.reduce((sum, req) => {
+        return sum + (req.responseSize || 0);
+      }, 0);
+      const totalSizeMB = totalSize / 1024 / 1024;
+
+      console.log(`预估总大小: ${totalSizeMB.toFixed(2)}MB`);
+
+      // 如果总大小超过200MB，记录警告
+      if (totalSizeMB > 200) {
+        console.warn(`警告：数据量较大 (${totalSizeMB.toFixed(2)}MB)，可能需要较长时间处理`);
+      }
+
+      const zip = new JSZip();
+      const manifest = [];
+      let processedCount = 0;
+      let skippedCount = 0;
+
+      // 遍历所有请求，添加到ZIP中
+      for (const req of requests) {
+        if (!req.responseBody) {
+          skippedCount++;
+          continue;
+        }
+
+        try {
+          const filePath = this.buildFilePath(req.url, req.contentType, req.mimeType);
+          const buffer = this.getBodyBuffer(req);
+
+          // 添加文件到ZIP
+          zip.file(filePath, buffer, { binary: true });
+
+          // 记录到manifest
+          manifest.push({
+            url: req.url,
+            status: req.status,
+            method: req.method,
+            size: req.responseSize || buffer.length,
+            type: req.contentType,
+            mimeType: req.mimeType,
+            savedAs: filePath,
+            timestamp: req.timestamp
+          });
+
+          processedCount++;
+        } catch (error) {
+          console.error(`处理请求失败 ${req.url}:`, error);
+          skippedCount++;
+        }
+      }
+
+      // 添加manifest.json文件
+      zip.file('manifest.json', JSON.stringify({
+        generatedAt: new Date().toISOString(),
+        tabId: tabId,
+        totalRequests: requests.length,
+        processedFiles: processedCount,
+        skippedFiles: skippedCount,
+        items: manifest
+      }, null, 2));
+
+      console.log(`ZIP内容准备完成: ${processedCount}个文件`);
+
+      // 生成ZIP文件
+      const blob = await zip.generateAsync({
+        type: 'blob',
+        compression: 'DEFLATE',
+        compressionOptions: { level: 6 }
+      }, (metadata) => {
+        console.log(`压缩进度: ${metadata.percent.toFixed(2)}%`);
+      });
+
+      console.log(`ZIP生成完成，大小: ${(blob.size / 1024 / 1024).toFixed(2)}MB`);
+
+      // 在Service Worker中使用FileReader将Blob转换为Data URL
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0];
+      const filename = `network-capture-${timestamp}-${tabId}.zip`;
+
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+
+        reader.onload = () => {
+          const dataUrl = reader.result;
+
+          // 使用Data URL触发下载
+          chrome.downloads.download({
+            url: dataUrl,
+            filename: filename,
+            saveAs: true
+          }, (downloadId) => {
+            if (chrome.runtime.lastError) {
+              reject(new Error(chrome.runtime.lastError.message));
+            } else {
+              console.log(`下载已启动: ${downloadId}`);
+              resolve({
+                downloadId,
+                total: processedCount,
+                skipped: skippedCount,
+                size: blob.size
+              });
+            }
+          });
+        };
+
+        reader.onerror = () => {
+          reject(new Error('无法读取ZIP文件数据'));
+        };
+
+        // 读取Blob为Data URL
+        reader.readAsDataURL(blob);
+      });
+    } catch (error) {
+      console.error('创建ZIP失败:', error);
+      throw error;
+    }
   }
 }
 
@@ -573,6 +758,37 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       chrome.tabs.create({ url: chrome.runtime.getURL('panel.html') });
       sendResponse({ success: true });
       return true;
+
+    case 'downloadZip': {
+      const targetTabId = request.tabId;
+      if (!targetTabId) {
+        sendResponse({ success: false, message: '缺少 tabId 参数' });
+        return true;
+      }
+
+      console.log(`接收到打包下载请求，标签页ID: ${targetTabId}`);
+
+      networkCapture.createZipForTab(targetTabId)
+        .then(result => {
+          console.log('打包成功:', result);
+          sendResponse({
+            success: true,
+            total: result.total,
+            skipped: result.skipped,
+            size: result.size,
+            downloadId: result.downloadId
+          });
+        })
+        .catch(error => {
+          console.error('打包下载失败:', error);
+          sendResponse({
+            success: false,
+            message: error.message || '打包失败，请重试'
+          });
+        });
+
+      return true; // 异步响应
+    }
   }
 });
 

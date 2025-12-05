@@ -18,6 +18,7 @@ class NetworkCapturePanel {
         document.getElementById('refreshBtn').addEventListener('click', () => this.refresh());
         document.getElementById('clearBtn').addEventListener('click', () => this.clearData());
         document.getElementById('exportBtn').addEventListener('click', () => this.exportData());
+        document.getElementById('downloadZipBtn').addEventListener('click', () => this.downloadZip());
 
         // 过滤器事件
         document.getElementById('searchInput').addEventListener('input', () => this.filterRequests());
@@ -326,6 +327,13 @@ class NetworkCapturePanel {
         container.textContent = content;
     }
 
+    // 转义HTML特殊字符，防止XSS攻击
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
     displayPreview() {
         const container = document.getElementById('contentPreview');
         if (!this.selectedRequest.responseBody) {
@@ -347,11 +355,13 @@ class NetworkCapturePanel {
 
         // 根据内容类型显示预览
         if (this.selectedRequest.contentType === 'html') {
+            // 使用sandbox属性隔离iframe，防止恶意脚本执行
+            // allow-same-origin 允许访问同源内容，但不允许脚本执行
             container.innerHTML = `
                 <div class="preview-warning">
-                    <strong>HTML预览 (沙盒环境):</strong>
+                    <strong>HTML预览 (沙盒环境 - 脚本已禁用):</strong>
                 </div>
-                <iframe srcdoc="${content.replace(/"/g, '&quot;')}"></iframe>
+                <iframe sandbox="allow-same-origin" srcdoc="${this.escapeHtml(content)}"></iframe>
             `;
         } else if (this.selectedRequest.contentType === 'css') {
             container.innerHTML = `
@@ -502,6 +512,68 @@ class NetworkCapturePanel {
         document.body.removeChild(a);
 
         URL.revokeObjectURL(url);
+    }
+
+    async downloadZip() {
+        if (this.requests.length === 0) {
+            alert('没有数据可以打包下载');
+            return;
+        }
+
+        try {
+            // 获取sourceTabId
+            const sourceTabId = await new Promise((resolve) => {
+                chrome.storage.local.get(['sourceTabId'], (result) => {
+                    resolve(result.sourceTabId);
+                });
+            });
+
+            // 如果没有sourceTabId，尝试使用当前活动标签页
+            const tabIdToUse = sourceTabId || await new Promise((resolve) => {
+                chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                    resolve(tabs[0] && tabs[0].id);
+                });
+            });
+
+            if (!tabIdToUse) {
+                alert('无法获取目标标签页ID，请确保有活动的捕获会话');
+                return;
+            }
+
+            // 显示进度提示
+            const originalText = document.getElementById('downloadZipBtn').textContent;
+            document.getElementById('downloadZipBtn').textContent = '打包中...';
+            document.getElementById('downloadZipBtn').disabled = true;
+
+            // 发送打包请求
+            chrome.runtime.sendMessage({
+                action: 'downloadZip',
+                tabId: tabIdToUse
+            }, (response) => {
+                // 恢复按钮状态
+                document.getElementById('downloadZipBtn').textContent = originalText;
+                document.getElementById('downloadZipBtn').disabled = false;
+
+                if (chrome.runtime.lastError) {
+                    alert('打包失败: ' + chrome.runtime.lastError.message);
+                    return;
+                }
+
+                if (response && response.success) {
+                    const sizeInMB = (response.size / 1024 / 1024).toFixed(2);
+                    const message = `打包成功！\n文件数: ${response.total}\n大小: ${sizeInMB}MB${response.skipped > 0 ? `\n跳过: ${response.skipped}个` : ''}`;
+                    alert(message);
+                } else {
+                    alert(response && response.message ? response.message : '打包失败，请重试');
+                }
+            });
+        } catch (error) {
+            console.error('打包下载失败:', error);
+            alert('打包下载失败: ' + error.message);
+            // 恢复按钮状态
+            document.getElementById('downloadZipBtn').textContent = '打包下载';
+            document.getElementById('downloadZipBtn').disabled = false;
+        }
     }
 }
 

@@ -35,6 +35,10 @@ class NetworkCapturePopup {
         document.getElementById('settingsBtn').addEventListener('click', () => {
             this.openSettings();
         });
+
+        document.getElementById('downloadZipBtn').addEventListener('click', () => {
+            this.downloadZip();
+        });
     }
 
     async checkCaptureStatus() {
@@ -118,6 +122,54 @@ class NetworkCapturePopup {
     openSettings() {
         // 显示关于和作者信息
         this.showNotification('Network Capture Pro v1.0.0 - 作者：小肩膀', 'info');
+    }
+
+    async downloadZip() {
+        try {
+            // 检查是否有数据
+            if (!this.requests || this.requests.length === 0) {
+                this.showNotification('没有可下载的数据，请先捕获一些网络请求', 'warning');
+                return;
+            }
+
+            // 获取当前标签页ID
+            chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                if (tabs.length === 0) {
+                    this.showNotification('无法获取当前标签页', 'error');
+                    return;
+                }
+
+                const tabId = tabs[0].id;
+                this.showNotification('正在打包文件，请稍候...', 'info');
+
+                // 发送打包下载请求
+                chrome.runtime.sendMessage({
+                    action: 'downloadZip',
+                    tabId: tabId
+                }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        this.showNotification('打包失败: ' + chrome.runtime.lastError.message, 'error');
+                        return;
+                    }
+
+                    if (response && response.success) {
+                        const sizeInMB = (response.size / 1024 / 1024).toFixed(2);
+                        this.showNotification(
+                            `打包成功！共${response.total}个文件 (${sizeInMB}MB)${response.skipped > 0 ? `，跳过${response.skipped}个` : ''}`,
+                            'success'
+                        );
+                    } else {
+                        this.showNotification(
+                            response && response.message ? response.message : '打包失败，请重试',
+                            'error'
+                        );
+                    }
+                });
+            });
+        } catch (error) {
+            console.error('打包下载失败:', error);
+            this.showNotification('打包下载失败: ' + error.message, 'error');
+        }
     }
 
     async clearData() {
